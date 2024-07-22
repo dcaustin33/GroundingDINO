@@ -113,7 +113,6 @@ def batch_predict(
     """
     caption = preprocess_caption(caption=caption)
 
-    model = model.to(device)
     preprocessed_images = preprocessed_images.to(device)
 
     with torch.no_grad():
