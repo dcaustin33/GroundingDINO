@@ -70,9 +70,11 @@ def predict(
     prediction_logits = outputs["pred_logits"].cpu().sigmoid()[0]  # prediction_logits.shape = (nq, 256)
     prediction_boxes = outputs["pred_boxes"].cpu()[0]  # prediction_boxes.shape = (nq, 4)
 
-    mask = prediction_logits.max(dim=1)[0] > box_threshold
+    mask = prediction_logits.max(dim=1)[0] > box_threshold (n)
     logits = prediction_logits[mask]  # logits.shape = (n, 256)
     boxes = prediction_boxes[mask]  # boxes.shape = (n, 4)
+    import pdb; pdb.set_trace()
+    
 
     tokenizer = model.tokenizer
     tokenized = tokenizer(caption)
@@ -95,6 +97,40 @@ def predict(
         ]
 
     return boxes, logits.max(dim=1)[0], phrases
+
+def batch_predict(
+        model,
+        preprocessed_images: torch.Tensor,
+        caption: str,
+        box_threshold: float,
+        text_threshold: float,
+        device: str = "cuda",
+        remove_combined: bool = False
+) -> Tuple[torch.Tensor, torch.Tensor, List[str]]:
+    """
+    Adaptation from the above function to allow for batch processing of images with the same caption
+    Also returns an indices to let you know which boxes correspond to which images
+    """
+    caption = preprocess_caption(caption=caption)
+
+    model = model.to(device)
+    preprocessed_images = preprocessed_images.to(device)
+
+    with torch.no_grad():
+        outputs = model(preprocessed_images, captions=[caption for _ in range(preprocessed_images.shape[0])])
+
+    prediction_logits = outputs["pred_logits"].sigmoid()  # prediction_logits.shape = (bs, nq, 256)
+    prediction_boxes = outputs["pred_boxes"]  # prediction_boxes.shape = (bs, nq, 4)
+
+    mask = prediction_logits.max(dim=-1).values > box_threshold #(bs, nq)
+    logits = prediction_logits[mask]  
+    boxes = prediction_boxes[mask]
+    boxes_to_image = []
+    for i in range(mask.shape[0]):
+        sum_of_mask = mask[i].sum()
+        boxes_to_image.extend([i]*sum_of_mask)
+    
+    return boxes, logits.max(dim=1)[0], boxes_to_image
 
 
 def annotate(image_source: np.ndarray, boxes: torch.Tensor, logits: torch.Tensor, phrases: List[str]) -> np.ndarray:
@@ -172,10 +208,10 @@ class Model:
         box_annotator = sv.BoxAnnotator()
         annotated_image = box_annotator.annotate(scene=image, detections=detections, labels=labels)
         """
-        processed_image = Model.preprocess_image(image_bgr=image).to(self.device)
+        # processed_image = Model.preprocess_image(image_bgr=image).to(self.device)
         boxes, logits, phrases = predict(
             model=self.model,
-            image=processed_image,
+            image=image,
             caption=caption,
             box_threshold=box_threshold,
             text_threshold=text_threshold, 
@@ -187,6 +223,7 @@ class Model:
             boxes=boxes,
             logits=logits)
         return detections, phrases
+
 
     def predict_with_classes(
         self,
@@ -242,8 +279,20 @@ class Model:
                 T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
             ]
         )
-        image_pillow = Image.fromarray(cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB))
-        image_transformed, _ = transform(image_pillow, None)
+        image_transformed, _ = transform(image_bgr, None)
+        return image_transformed
+
+    @staticmethod
+    def preprocess_image_path(image_path: str) -> torch.Tensor:
+        transform = T.Compose(
+            [
+                T.RandomResize([800], max_size=1333),
+                T.ToTensor(),
+                T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+            ]
+        )
+        image_bgr = Image.open(image_path).convert("RGB")
+        image_transformed, _ = transform(image_bgr, None)
         return image_transformed
 
     @staticmethod
@@ -254,6 +303,7 @@ class Model:
             logits: torch.Tensor
     ) -> sv.Detections:
         boxes = boxes * torch.Tensor([source_w, source_h, source_w, source_h])
+        print(boxes, source_h, source_w)
         xyxy = box_convert(boxes=boxes, in_fmt="cxcywh", out_fmt="xyxy").numpy()
         confidence = logits.numpy()
         return sv.Detections(xyxy=xyxy, confidence=confidence)
