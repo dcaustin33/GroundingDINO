@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "groundingdino"
+version = "0.1.0"
+description = ""
+authors = ["dcaustin33 <dcaustin33@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+numpy = "<2.0"
+ipykernel = "^6.29.5"
+opencv-python = "^4.10.0.84"
+supervision = "0.21.0"
+torch = "^2.3.1"
+torchvision = "^0.18.1"
+transformers = "^4.42.4"
+addict = "^2.4.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
