@@ -81,6 +81,10 @@ def get_extensions():
 
     extra_compile_args = {"cxx": []}
     define_macros = []
+    print("IN EXXTENSIONSSS")
+    print(f"CUDA_HOME: {CUDA_HOME}")
+    print(f"torch.cuda.is_available(): {torch.cuda.is_available()}")
+    print(f"TORCH_CUDA_ARCH_LIST in env: {'TORCH_CUDA_ARCH_LIST' in os.environ}")
 
     if CUDA_HOME is not None and (torch.cuda.is_available() or "TORCH_CUDA_ARCH_LIST" in os.environ):
         print("Compiling with CUDA")
