@@ -147,3 +147,6 @@ tmp/
 
 *.pt
 *.pth
+
+**/labels
+**/oct15
